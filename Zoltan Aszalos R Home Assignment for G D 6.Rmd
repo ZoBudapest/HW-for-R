@@ -1,0 +1,257 @@
+---
+title: "Home assignment - nycflights"
+author: "Zoltan Aszalos"
+date: "February 6, 2017"
+output:
+  html_document: default
+  github_document:
+    html_preview: no
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, error = TRUE)
+```
+
+####Tasks for this assignment: 
+
+### 1. Exploratory data analysis on the available features 
+Overview of the general information on data in 3 data sets (Airlines, Airports and Flights )
+
+### 2. A model predicting if a flight will be late by 15+ minutes at the destination
+Based on information on late flights applying the random forest model
+
+
+The key question of this exercise is to identify factors leading to late arrivals. It is to note that some factors with a potential impact on delays are not included in these 3 tables, and also not included in any of the 5 data sets: e.g. the number of runways at an airport, quality of air / flight control services, check-in and baggage services.
+
+### 1. Exploratory data analysis on the available features 
+
+This first chapter includes a quick exploration of data in 3 data sets:
+1 airlines
+2 airports
+3 flights
+
+
+What the statistics reveals: 
+
+##ARLINES: Data set on 16 airlines 
+
+```{r airlines, echo=FALSE} 
+library(ggplot2)
+library(dplyr)
+library(nycflights13)
+pandoc.table(airlines)
+
+```
+
+This data set includes the abbreviated name of 16 airlines in the US. These are the main airlines of the US. For a complete list of US airlines, including regional airlines please visit Wikipedia: [link](https://en.wikipedia.org/wiki/List_of_airlines_of_the_United_States)  
+
+
+The  association plot shows the deviation of the number of flights of different carriers from the three airports of origin. 
+```{r, echo=FALSE}
+unified = merge(flights, airlines, by.x='carrier', by.y='carrier')
+unified = merge(unified, airports, by.x='origin', by.y='faa')
+unified = merge(unified, airports, by.x='dest', by.y='faa', all.x=T)
+
+mn = table(unified$carrier, unified$origin)
+library(vcd)
+assoc(mn,  shade = TRUE)
+
+```
+
+##AIRPORTS: Dataset on 1,458 airports 
+
+
+This is a data set presenting the geographic location, the altitude and the time zone of the airports: the origin and destination airports represented in the flights dataset. The three origin aiports are all around New York City: JFK - New York, LaGuardia - New York and EWR - New Jersey.
+
+The distribution of aiports at various altitute levels is shows by the below chart. 
+
+```{r, echo=FALSE}
+ggplot(airports, aes(alt)) + geom_bar(aes()) + theme_minimal() + geom_histogram(binwidth = 100, fill="white", colour="blue") + ggtitle("Number of airports at different altitude levels") + xlab("Altitude")  + ylab("Count")
+```
+
+This graph shows that the airports are dominantly close to sea level, with some exceptions (max hight is `r max(airports$alt, na.rm = TRUE)` feeet above sea level). From this dataset we will explore the potential impact of one factor on flight delays: altitudes.
+
+As part of data exploration the below chart shows the longitude of the airports. It reveals the dominance of flights of East Coast to flights on the West Coast.  
+
+```{r, echo=FALSE}
+ggplot(airports, aes(lon)) + geom_bar(aes())+ scale_fill_gradient() + theme_minimal() + geom_histogram(binwidth = 1, fill="white", colour="blue") + ggtitle("Longitude of Airports") + xlab("Longitude")  + ylab("Count") + xlim(-200, -50)
+```
+
+
+#FLIGHTS: Data set on 336776 flights to and from the 3 New York airports
+```{r, echo=FALSE}
+dplyr::tbl_df(flights)
+```
+This dataset is the central dataset. The columns in this data frame:
+
+* year,month,day: Date of departure
+
+* dep_time,arr_time: Actual departure and arrival times, local tz.
+
+* sched_dep_time,sched_arr_time: Scheduled departure and arrival times, local tz.
+
+* dep_delay,arr_delay: Departure and arrival delays, in minutes. Negative times represent early departures/arrivals.
+
+* hour,minute: Time of scheduled departure broken into hour and minutes.
+
+* carrier: Two letter carrier abbreviation. See the "airlines" data set to get name
+
+* tailnum: Plane tail number
+
+* flight: Flight number
+
+* origin, dest: Origin and destination. See airports for additional metadata.
+
+* air_time: Amount of time spent in the air, in minutes
+
+* distance: Distance between airports, in miles
+
+* time_hour: Scheduled date and hour of the flight as a POSIXct date. Along with origin, can be used to join flights data to weather data.
+
+
+Analysis reveals the following information: 
+
+* Some flights arrive early, the earliest is `r min(flights$arr_delay, na.rm = TRUE)` minutes early in the database, and some flights are late, the latest was `r max(flights$arr_delay, na.rm = TRUE)` minutes late. 
+
+* On average, flights are late with `r mean(flights$arr_delay, na.rm = TRUE)` minutes.
+
+* Out of the 336,776 flights in the database, there are 77,630 cases of late arrivals over 15 minutes. 
+
+The below chart on the distribution of actual departure times during the day shows a peak of flights in the morning and another peak in the afternoon.
+
+```{r, echo=FALSE}
+ggplot(flights, aes(dep_time)) + theme_minimal() + ggtitle("Departure times of flights during the day") + xlab("Departure times between 00:00 and 24:00")  +  ylab("Number of flights") + geom_histogram(binwidth=20, fill="white", colour="blue") 
+```
+
+
+And another distribution chart on arrivals during the day:
+
+```{r, echo=FALSE}
+ggplot(flights, aes(arr_time)) + theme_minimal() +   ggtitle("Arrival of flights during the day") + xlab("Arrival times between 00:00 and 24:00")  + ylab("Number of flights") + geom_histogram(binwidth=15, fill="white", colour="blue")
+```
+
+The below graphs shows the rather even distribution of the number of flights during the year per month with a minor setback in February. 
+
+```{r, echo=FALSE}
+ggplot(flights, aes(month)) + theme_minimal() + ggtitle("Density of departures during the year") + xlab("Departures between January and December")  + ylab("Count")  + geom_histogram(binwidth=1, fill="white", colour="blue")
+
+```
+
+
+```{r, echo=FALSE}
+ggplot(flights, aes(arr_delay), na.rm=NA) + theme_minimal() + geom_histogram(binwidth = 10, fill="grey", colour="blue") + ggtitle("Distribution of early and late flights") + xlab("Early and late flights in 10 minutes time slots")  + ylab("Count") + xlim(-100, 200) 
+```
+
+
+The distribution of total flights among carriers is provided by the below table, showing that UA, B6, EV and Delta carry cover most flights. 
+```{r, echo=FALSE}
+reorder_size <- function(x) {
+  factor(x, levels = names(sort(table(x))))
+}
+ggplot(flights, aes(reorder_size(carrier))) + geom_bar(fill="lightblue", colour="black") + ggtitle("Distribution of total flights among carriers") + xlab("Carriers - abbreviated names") + theme_minimal()
+
+```
+
+#The "planes" data set
+
+This dataset provides for each plane: the tail number, year of manufacturing, type of the plane, the manufacturer, the model, number of engines, number of seats, the average cruising speed in mph and the type of engine. 
+
+At the data exploration phase a quick check of some basic information: The number of planes manufactured per year by engine type. 
+
+The belowchart shows that the planes are dominantly run with turbo-fan engines with some turbo jet engines. They are runnning planes built dominantly after 1983 with the peak year 2001.
+
+```{r, echo=FALSE}
+ggplot(planes, aes(year, fill = engine)) + geom_bar() + ggtitle("Number of airplanes manufactured per year by engine type") + xlab("Year of production")
+```
+Note: we shall not use the airplanes data set for the model.
+
+
+### 2. a model predicting if a flight will be late by 15+ minutes at the destination
+
+
+To start with, some two-dimensional analysis of factors and delays: 
+
+**ANALYSIS OF DELAYS BASED ON THE EXTENDED FLIGHTS DATASET**
+**Altitude of destination airports & Arrival Delays**
+
+As the chart shows, at airports at sea level, i.e. airports close to the sea and at aiports at very high altitudes delays are more significant on average.  
+```{r, echo=FALSE}
+airports
+ggplot(unified, aes(x=alt, y=arr_delay)) + geom_smooth() + ggtitle("Altitude of destination airports and arrival delay ") + xlab("Altitude of destination airports") + ylab("Average delay at destination")
+```
+
+**Longitude of destination airports & Arrival Delays**
+
+As the chart shows, the closer the destination aiports to N.Y. the more likely that delays will occur. This is partly explained by the fact that these aiports are closer to the airports of origin. This means shorter flight distances, where airplanes have no time to catch up with original arrrival schedule. This is also demonstrated later on by the chart on Flight distances & Arrival Delays. 
+
+```{r, echo=FALSE}
+ggplot(unified, aes(x=lon, y=arr_delay)) + geom_smooth() + ggtitle("Longitude of destination airports and arrival delay ") + xlab("Longitude of destination airports") + ylab("Average delay at destination")
+```
+
+**Hour of Departure & Departure Delays**
+
+Flights  usually depart late in the afternoons with a peak at 20:00 p.m. Therefore this can be already an explanation why flights can be late at the destination.  
+
+```{r, echo=FALSE}
+ggplot(unified, aes(x=hour, y=dep_delay)) + geom_smooth() + ggtitle("Hour of departure and departure delays") + xlab("Hour of departure") + ylab("Average delay at departure")
+```
+
+**Hour of Departure & Arrival Delays**
+
+Flights tend to arrive early if the departure time is before 10.00 am. and the average delay of flights increases until 20:00 p.m. This chart with the previous one already provides a reason for late arrivals: airplanes depart late in the afternoon therefore there arrival is also late. 
+
+```{r, echo=FALSE}
+ggplot(unified, aes(x=hour, y=arr_delay)) + geom_smooth() + ggtitle("Hour of departure and arrival delays") + xlab("Hour of departure") + ylab("Average delay at arrival")
+```
+
+**Month of Departure & Departure Delays**
+
+Flights are most likely to depart late in June, and least likely to be late in early November with additional peak of arrrival delays in December, the Christmas period. This departure delay also transforms into arrival delay. 
+
+```{r, echo=FALSE}
+ggplot(unified, aes(x=month, y=dep_delay)) + geom_smooth() + ggtitle("Average departure delays by month") + xlab("Months of departure") + ylab("Average delay at departure")
+
+```
+
+**Flight distance & arrival delays**
+
+Short distance flights between 200 and 800 miles are the most likely to be late, and with distance the average delay of flights increases. This is explained by the fact that during a long distance flight the airplane is more able to catch up with original schedule.  
+
+```{r, echo=FALSE}
+ggplot(unified, aes(x=distance, y=arr_delay)) + geom_smooth() + ggtitle("Departure delays by flight distance") + xlab("Distance of the flights") + ylab("Average arrival delay")
+
+```
+
+**Carriers & Arrival delays**
+
+As the below boxplot shows, there is little difference between the average flight delays (or early arrivals) of the various carriers. 
+
+```{r, echo=FALSE}
+ggplot(unified, aes(x=carrier, y=arr_delay)) + geom_boxplot() + ggtitle("Carriers and flight delays") + xlab("Carrier") + ylab("Average delay by carrier")
+```
+
+**Airports of origin & Arrival delays**
+
+The airports of origin cannot provide an explanation for the delays as the boxplot shows for the three airports: JFK - New York, LaGuardia - New York and EWR - New Jersey.
+
+```{r, echo=FALSE}
+boxplot(log(flights$dep_delay) ~ flights$origin)
+```
+
+### Random forest model
+
+
+
+```{r, echo=FALSE}
+library(randomForest)
+unified$bin = ifelse(unified$dep_delay >  15, 1,0)
+
+wd = unified[,as.numeric(which(sapply(unified, class)!='character'))]
+wd = wd[which(complete.cases(wd)),]
+md = randomForest(factor(bin) ~ ., data = wd, ntree = 100)
+```
+
+
